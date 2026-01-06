@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Health Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="title">Health / Workout Dashboard</div>
+          <div class="subtitle">Mo/Wed/Fri schedule. Past week plus 2 weeks ahead.</div>
+        </div>
+      </header>
+
+      <div class="main-grid">
+        <section class="panel schedule-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Schedule</h2>
+              <div class="panel-sub" id="rangeLabel"></div>
+            </div>
+            <button class="btn ghost small" id="showPastBtn">Show 2 weeks earlier</button>
+          </div>
+          <div id="schedule" class="schedule-grid"></div>
+          <div class="schedule-footer">
+            <button class="btn ghost small" id="showMoreBtn">Show more</button>
+          </div>
+        </section>
+
+        <aside class="insights">
+          <section class="panel summary-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Summary</h2>
+                <div class="panel-sub">Auto-updates as you log</div>
+              </div>
+            </div>
+            <div class="summary-grid">
+              <div class="summary-card">
+                <div class="summary-title">Workouts (7d)</div>
+                <div class="summary-value" data-summary="workouts7">0/0</div>
+                <div class="summary-sub" data-summary="workouts7Sub">planned</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Cardio minutes (7d)</div>
+                <div class="summary-value" data-summary="cardio7">0 min</div>
+                <div class="summary-sub">Cycling + walking</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Est. burn (7d)</div>
+                <div class="summary-value" data-summary="burn7">0 kcal</div>
+                <div class="summary-sub">From logged data</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Weight trend</div>
+                <div class="summary-value" data-summary="weightLatest">--</div>
+                <div class="summary-sub" data-summary="weightDelta">No data yet</div>
+              </div>
+            </div>
+            <div class="calendar-wrap">
+              <div class="chart-title" id="calendarYearLabel">calendar</div>
+              <div class="year-grid" id="yearCalendar"></div>
+            </div>
+          </section>
+
+          <section class="panel charts-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Progress</h2>
+                <div class="panel-sub">Weight, fat, muscle, and training output</div>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-title">Body metrics</div>
+              <canvas id="bodyChart"></canvas>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="swatch weight"></span>Weight (kg)</span>
+                <span class="legend-item"><span class="swatch fat"></span>Fat %</span>
+                <span class="legend-item"><span class="swatch muscle"></span>Muscle %</span>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-title">Estimated calories</div>
+              <canvas id="calorieChart"></canvas>
+            </div>
+          </section>
+
+          <section class="panel metrics-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Body metrics entry</h2>
+                <div class="panel-sub">Weight, fat %, muscle %</div>
+              </div>
+            </div>
+            <div class="metrics-entry">
+              <label class="static-label">
+                Height (cm)
+                <div class="static-field">183</div>
+              </label>
+              <label>
+                Date
+                <input type="date" id="metricDate" lang="nl">
+              </label>
+              <label>
+                Weight (kg)
+                <input type="number" step="0.1" min="0" id="metricWeight" inputmode="decimal">
+              </label>
+              <label>
+                Fat %
+                <input type="number" step="0.1" min="0" max="100" id="metricFat" inputmode="decimal">
+              </label>
+              <label>
+                Muscle %
+                <input type="number" step="0.1" min="0" max="100" id="metricMuscle" inputmode="decimal">
+              </label>
+              <button class="btn" id="metricSave">Save</button>
+            </div>
+            <div class="metrics-table" id="metricsTable"></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
