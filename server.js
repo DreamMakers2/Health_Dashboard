@@ -8,6 +8,7 @@ const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'health.json');
 const BACKUP_FILE = path.join(DATA_DIR, 'health.backup.json');
+const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
 
 const DEFAULT_STATE = {
   settings: {
@@ -15,11 +16,41 @@ const DEFAULT_STATE = {
     lastAutoToday: '',
     extraPastWeeks: 0,
     extraFutureWeeks: 0,
+    heightCm: '',
   },
   workouts: {},
   metrics: {},
   customDates: [],
   lastSaved: null,
+};
+
+const DEFAULT_WEIGHTED_FORMULA = '0.006 * (load + 0.1 * bw)';
+const DEFAULT_BODYWEIGHT_FORMULA = '0.007 * (0.66 * bw)';
+
+const DEFAULT_CONFIG = {
+  scheduleDays: [1, 3, 5],
+  defaultPastWeeks: 1,
+  defaultFutureWeeks: 2,
+  darkMode: false,
+  exerciseGroups: {
+    armsBack: {
+      label: 'Arms / Back',
+      exercises: [
+        { id: 'latPulldown', label: 'Lat Pulldown', hasWeight: true, kcalFormula: DEFAULT_WEIGHTED_FORMULA },
+        { id: 'shoulderPress', label: 'Shoulder Press', hasWeight: true, kcalFormula: DEFAULT_WEIGHTED_FORMULA },
+        { id: 'bicepsCurl', label: 'Biceps Curl', hasWeight: true, kcalFormula: '0.004 * (load + 0.1 * bw)' },
+        { id: 'pushUp', label: 'Push-up', hasWeight: false, kcalFormula: DEFAULT_BODYWEIGHT_FORMULA },
+        { id: 'pullUp', label: 'Pull-up', hasWeight: false, kcalFormula: '0.008 * (1.0 * bw)' },
+      ],
+    },
+    coreAbs: {
+      label: 'Core / Abs',
+      exercises: [
+        { id: 'abdominal', label: 'Abdominal', hasWeight: true, kcalFormula: '0.003 * (load + 0.2 * bw)' },
+        { id: 'sitUp', label: 'Sit-up', hasWeight: false, kcalFormula: '0.005 * (0.4 * bw)' },
+      ],
+    },
+  },
 };
 
 const STATIC_FILES = {
@@ -47,6 +78,13 @@ function ensureDataFile() {
   }
 }
 
+function ensureConfigFile() {
+  if (!fs.existsSync(CONFIG_FILE)) {
+    const payload = JSON.stringify(DEFAULT_CONFIG, null, 2);
+    fs.writeFileSync(CONFIG_FILE, payload, 'utf8');
+  }
+}
+
 function readState() {
   try {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
@@ -66,6 +104,23 @@ function writeState(state) {
   fs.writeFileSync(BACKUP_FILE, payload, 'utf8');
 }
 
+function readConfig() {
+  try {
+    const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return normalizeConfig(parsed);
+  } catch (error) {
+    return normalizeConfig(DEFAULT_CONFIG);
+  }
+}
+
+function writeConfig(config) {
+  const payload = JSON.stringify(config, null, 2);
+  const tmpFile = `${CONFIG_FILE}.tmp`;
+  fs.writeFileSync(tmpFile, payload, 'utf8');
+  fs.renameSync(tmpFile, CONFIG_FILE);
+}
+
 function normalizeState(data) {
   if (!data || typeof data !== 'object') return { ...DEFAULT_STATE };
   return {
@@ -77,6 +132,78 @@ function normalizeState(data) {
     metrics: data.metrics || {},
     customDates: Array.isArray(data.customDates) ? data.customDates : [],
     lastSaved: data.lastSaved || DEFAULT_STATE.lastSaved,
+  };
+}
+
+function clampNumber(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+}
+
+function formulaUsesLoad(formula) {
+  if (!formula || typeof formula !== 'string') return false;
+  return /\bload\b/.test(formula);
+}
+
+function normalizeConfig(data) {
+  const source = data && typeof data === 'object' ? data : {};
+  const baseDays = Array.isArray(DEFAULT_CONFIG.scheduleDays) ? DEFAULT_CONFIG.scheduleDays : [1, 3, 5];
+  const rawDays = Array.isArray(source.scheduleDays) ? source.scheduleDays : baseDays;
+  const days = Array.from(new Set(rawDays.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)));
+  if (!days.length) days.push(...baseDays);
+
+  const defaultPastWeeks = clampNumber(source.defaultPastWeeks, 0, 52, DEFAULT_CONFIG.defaultPastWeeks);
+  const defaultFutureWeeks = clampNumber(source.defaultFutureWeeks, 0, 52, DEFAULT_CONFIG.defaultFutureWeeks);
+  const darkMode = Boolean(source.darkMode);
+
+  const exerciseGroups = {};
+  const sourceGroups = source.exerciseGroups && typeof source.exerciseGroups === 'object' ? source.exerciseGroups : {};
+
+  Object.keys(DEFAULT_CONFIG.exerciseGroups).forEach((groupKey) => {
+    const baseGroup = DEFAULT_CONFIG.exerciseGroups[groupKey];
+    const incomingGroup = sourceGroups[groupKey] && typeof sourceGroups[groupKey] === 'object' ? sourceGroups[groupKey] : null;
+    const label = incomingGroup && typeof incomingGroup.label === 'string' && incomingGroup.label.trim()
+      ? incomingGroup.label.trim()
+      : baseGroup.label;
+    const exercisesSource = incomingGroup && Array.isArray(incomingGroup.exercises)
+      ? incomingGroup.exercises
+      : baseGroup.exercises;
+
+    const normalizedExercises = [];
+    const seen = new Set();
+
+    exercisesSource.forEach((exercise) => {
+      if (!exercise || typeof exercise !== 'object') return;
+      const id = typeof exercise.id === 'string' ? exercise.id.trim() : '';
+      if (!id || seen.has(id)) return;
+      const labelValue = typeof exercise.label === 'string' && exercise.label.trim() ? exercise.label.trim() : id;
+      let kcalFormula = typeof exercise.kcalFormula === 'string' ? exercise.kcalFormula.trim() : '';
+      if (!kcalFormula) {
+        kcalFormula = DEFAULT_WEIGHTED_FORMULA;
+      }
+      const hasWeight = formulaUsesLoad(kcalFormula);
+      normalizedExercises.push({
+        id,
+        label: labelValue,
+        hasWeight,
+        kcalFormula,
+      });
+      seen.add(id);
+    });
+
+    exerciseGroups[groupKey] = {
+      label,
+      exercises: normalizedExercises,
+    };
+  });
+
+  return {
+    scheduleDays: days,
+    defaultPastWeeks,
+    defaultFutureWeeks,
+    darkMode,
+    exerciseGroups,
   };
 }
 
@@ -155,9 +282,28 @@ function sendFile(res, filePath) {
 }
 
 ensureDataFile();
+ensureConfigFile();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === '/api/config') {
+    if (req.method === 'GET') {
+      return sendJson(res, 200, readConfig());
+    }
+    if (req.method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const parsed = JSON.parse(body || '{}');
+        const normalized = normalizeConfig(parsed);
+        writeConfig(normalized);
+        return sendJson(res, 200, normalized);
+      } catch (error) {
+        return sendJson(res, 400, { error: 'Invalid JSON' });
+      }
+    }
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
 
   if (url.pathname === '/api/state') {
     if (req.method === 'GET') {

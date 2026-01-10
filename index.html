@@ -11,8 +11,9 @@
       <header class="topbar">
         <div class="brand">
           <div class="title">Health / Workout Dashboard</div>
-          <div class="subtitle">Mo/Wed/Fri schedule. Past week plus 2 weeks ahead.</div>
+          <div class="subtitle" id="scheduleSubtitle">Mo/Wed/Fri schedule. Past 1 week + next 2 weeks.</div>
         </div>
+        <button class="btn ghost small" id="settingsBtn" type="button">Settings</button>
       </header>
 
       <div class="main-grid">
@@ -22,11 +23,11 @@
               <h2>Schedule</h2>
               <div class="panel-sub" id="rangeLabel"></div>
             </div>
-            <button class="btn ghost small" id="showPastBtn">Show 2 weeks earlier</button>
+            <button class="btn ghost small" id="showPastBtn">Show earlier</button>
           </div>
           <div id="schedule" class="schedule-grid"></div>
           <div class="schedule-footer">
-            <button class="btn ghost small" id="showMoreBtn">Show more</button>
+            <button class="btn ghost small" id="showMoreBtn">Show later</button>
           </div>
         </section>
 
@@ -83,7 +84,7 @@
               </div>
             </div>
             <div class="chart-wrap">
-              <div class="chart-title">Estimated calories</div>
+              <div class="chart-title">Estimated kcal</div>
               <canvas id="calorieChart"></canvas>
             </div>
           </section>
@@ -98,7 +99,7 @@
             <div class="metrics-entry">
               <label class="static-label">
                 Height (cm)
-                <div class="static-field">183</div>
+                <div class="static-field" id="heightDisplay">Not set</div>
               </label>
               <label>
                 Date
@@ -123,6 +124,83 @@
         </aside>
       </div>
     </main>
+
+    <div class="settings-overlay is-hidden" id="settingsOverlay" aria-hidden="true">
+      <div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-header">
+          <h3 id="settingsTitle">Settings</h3>
+          <button class="btn ghost small" type="button" data-action="close-settings">Close</button>
+        </div>
+        <div class="settings-body">
+          <section class="settings-section">
+            <div class="settings-section-title">Profile</div>
+            <div class="settings-grid">
+              <label>
+                Height (cm)
+                <input type="number" min="0" step="0.1" inputmode="decimal" id="settingsHeight" data-profile-field="heightCm">
+              </label>
+            </div>
+            <div class="settings-help">Used to estimate kcal burn when logs are missing.</div>
+          </section>
+
+          <section class="settings-section">
+            <div class="settings-section-title">Workout schedule</div>
+            <div class="settings-days" id="settingsDays"></div>
+            <div class="settings-grid">
+              <label>
+                Past weeks visible
+                <input type="number" min="0" step="1" inputmode="numeric" id="settingsPastWeeks" data-config-field="defaultPastWeeks">
+              </label>
+              <label>
+                Future weeks visible
+                <input type="number" min="0" step="1" inputmode="numeric" id="settingsFutureWeeks" data-config-field="defaultFutureWeeks">
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="settings-section-title">Exercises</div>
+            <div class="settings-help">
+              Formula is kcal per rep. Use bw for body weight (kg) and load for external weight (kg). If load is not used, the exercise is treated as bodyweight only. Example: 0.006 * (load + 0.1 * bw)
+            </div>
+            <div class="settings-exercises" id="settingsExercises"></div>
+          </section>
+
+          <section class="settings-section">
+            <div class="settings-section-title">Display</div>
+            <label class="toggle-row">
+              <input type="checkbox" id="settingsDarkMode" data-config-field="darkMode">
+              <span>Dark mode</span>
+            </label>
+          </section>
+
+          <div class="settings-footer">Changes save automatically.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-overlay is-hidden" id="profileOverlay" aria-hidden="true">
+      <div class="profile-panel" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+        <h3 id="profileTitle">Finish your profile</h3>
+        <p id="profileMessage">Add missing details to improve kcal estimates.</p>
+        <div class="settings-grid">
+          <label>
+            Height (cm)
+            <input type="number" min="0" step="0.1" inputmode="decimal" id="profileHeight" data-profile-field="heightCm">
+          </label>
+          <label id="profileWeightRow">
+            Starting weight (kg)
+            <input type="number" min="0" step="0.1" inputmode="decimal" id="profileWeight" data-profile-weight="true">
+          </label>
+        </div>
+        <div class="profile-actions">
+          <button class="btn ghost small" type="button" data-action="close-profile">Not now</button>
+          <button class="btn small" type="button" data-action="open-settings">Open settings</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast is-hidden" id="settingsToast" role="status" aria-live="polite">Settings saved</div>
 
     <script src="app.js"></script>
   </body>
