@@ -26,7 +26,7 @@
   --calendar-workout: #dbe8ea;
   --calendar-completed: #57b97a;
   --calendar-missed: #d86c6c;
-  --calendar-scheduled: #f1c48a;
+  --calendar-scheduled: #c9deef;
   --overlay: rgba(15, 20, 23, 0.35);
   --sheen: rgba(255, 255, 255, 0.5);
   --grid-line: rgba(15, 76, 92, 0.03);
@@ -61,7 +61,7 @@
   --calendar-workout: #26424b;
   --calendar-completed: #3e9560;
   --calendar-missed: #934b4b;
-  --calendar-scheduled: #7b5a2d;
+  --calendar-scheduled: #2f485f;
   --overlay: rgba(8, 10, 12, 0.6);
   --sheen: rgba(255, 255, 255, 0.06);
   --grid-line: rgba(127, 178, 190, 0.08);
@@ -94,7 +94,7 @@ body::before {
 }
 
 .app {
-  max-width: 2000px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 24px 32px 40px;
 }
@@ -171,7 +171,7 @@ body::before {
 
 .main-grid {
   display: grid;
-  grid-template-columns: minmax(720px, 2fr) minmax(380px, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 24px;
 }
 
@@ -184,12 +184,42 @@ body::before {
   animation: rise 0.6s ease both;
 }
 
+.summary-panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.range-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.range-btn {
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--chip-text);
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.range-btn.is-active {
+  background: var(--chip-active);
+  color: #fff;
+  border-color: var(--chip-active);
 }
 
 .panel h2 {
@@ -394,6 +424,42 @@ textarea {
   color: var(--ink);
 }
 
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.unit-field {
+  position: relative;
+  width: 100%;
+}
+
+.unit-field input {
+  width: 100%;
+  padding-right: 46px;
+}
+
+.unit-field.wide input {
+  padding-right: 82px;
+}
+
+.unit-label {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 textarea {
   resize: vertical;
   min-height: 34px;
@@ -457,6 +523,33 @@ textarea {
   gap: 12px;
 }
 
+.summary-notes,
+.progress-notes {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.summary-lines {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.summary-line {
+  margin: 0;
+}
+
+.progress-notes {
+  margin-bottom: 16px;
+}
+
 .summary-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -490,31 +583,36 @@ textarea {
 
 .calendar-wrap {
   margin-top: 16px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
   display: grid;
   gap: 12px;
+  box-shadow: var(--shadow);
+}
+
+.summary-panel .calendar-wrap {
+  margin-top: 0;
 }
 
 .year-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
 }
 
 .month-card {
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 8px;
-  background: var(--surface-2);
+  padding: 6px;
+  background: #ffffff;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .month-title {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--muted);
@@ -523,15 +621,20 @@ textarea {
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 
 .cal-day {
   width: 100%;
   padding-top: 100%;
   border-radius: 3px;
-  background: var(--surface-3);
+  background: transparent;
+  border: 1px solid transparent;
   position: relative;
+}
+
+.cal-day[data-date] {
+  cursor: pointer;
 }
 
 .cal-day.empty,
@@ -541,18 +644,30 @@ textarea {
 
 .cal-day.workout {
   background: var(--calendar-workout);
+  border-color: transparent;
 }
 
 .cal-day.completed {
   background: var(--calendar-completed);
+  border-color: transparent;
 }
 
 .cal-day.missed {
   background: var(--calendar-missed);
+  border-color: transparent;
 }
 
 .cal-day.scheduled {
   background: var(--calendar-scheduled);
+  border-color: transparent;
+}
+
+.cal-day.off {
+  border-color: var(--line);
+}
+
+.cal-day.empty {
+  border-color: transparent;
 }
 
 .cal-day::after {
@@ -569,6 +684,13 @@ textarea {
   display: grid;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.progress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .chart-title {
@@ -590,6 +712,30 @@ canvas {
   gap: 10px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.chart-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chart-value {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chart-value strong {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .legend-item {
@@ -622,7 +768,7 @@ canvas {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 10px;
   align-items: stretch;
-  margin-bottom: 14px;
+  margin-bottom: 22px;
 }
 
 .metrics-entry > * {
@@ -631,6 +777,23 @@ canvas {
 
 .metrics-entry label input {
   width: 100%;
+}
+
+.metrics-entry .btn {
+  align-self: end;
+  min-height: 34px;
+  padding: 8px 16px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 .static-label {
@@ -1045,6 +1208,10 @@ input.is-invalid {
   }
 
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-grid {
     grid-template-columns: 1fr;
   }
 

@@ -13,6 +13,8 @@ Local-first workout and body-metrics dashboard that runs on a tiny Node.js serve
 ## Using the dashboard
 - Log workouts on the schedule cards and add cardio minutes.
 - Add body metrics (weight, fat %, muscle %) in the right-hand panel.
+- Use the Progress range toggle to switch between 30 days, 90 days, or all-time views.
+- Use the calendar to jump to a scheduled day or add/remove a custom workout day (click again to remove if empty, confirm to delete if it has data).
 - Use Settings to adjust schedule days, visible weeks, exercise list, and kcal formulas.
 - Formula inputs accept `bw` (body weight in kg) and `load` (external weight in kg).
 

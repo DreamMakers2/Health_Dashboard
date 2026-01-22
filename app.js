@@ -42,6 +42,8 @@ const WEEKDAY_OPTIONS = [
   { id: 6, short: 'Sat', label: 'Saturday' },
   { id: 0, short: 'Sun', label: 'Sunday' },
 ];
+const SHORT_DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 let state = null;
 let config = null;
@@ -77,6 +79,9 @@ const metricSave = document.getElementById('metricSave');
 const metricsTable = document.getElementById('metricsTable');
 const yearCalendar = document.getElementById('yearCalendar');
 const calendarYearLabel = document.getElementById('calendarYearLabel');
+const progressRange = document.getElementById('progressRange');
+const progressSubtitle = document.getElementById('progressSubtitle');
+const progressHighlightTitle = document.getElementById('progressHighlightTitle');
 
 let renderContext = null;
 let saveTimer = null;
@@ -170,6 +175,14 @@ async function init() {
   metricsTable.addEventListener('input', handleMetricsInput);
   metricsTable.addEventListener('click', handleMetricsClick);
 
+  if (yearCalendar) {
+    yearCalendar.addEventListener('click', handleCalendarClick);
+  }
+
+  if (progressRange) {
+    progressRange.addEventListener('click', handleProgressRangeClick);
+  }
+
   window.addEventListener('beforeunload', () => {
     saveState();
     flushServerSave();
@@ -184,6 +197,7 @@ async function init() {
   updateScheduleSubtitle();
   renderHeightDisplay();
   maybeOpenProfilePrompt();
+  syncProgressRangeButtons();
 
   renderSchedule();
   renderMetricsTable();
@@ -301,6 +315,7 @@ function defaultState() {
       extraPastWeeks: 0,
       extraFutureWeeks: 0,
       heightCm: '',
+      progressRange: '30',
     },
     workouts: {},
     metrics: {},
@@ -634,6 +649,33 @@ function formatShortDateNL(date) {
   return `${day}-${month}`;
 }
 
+function formatShortDayLabel(date) {
+  const label = SHORT_DAY_LABELS[date.getUTCDay()] || '';
+  return `${label} ${formatShortDateNL(date)}`;
+}
+
+function formatDecimal(value, digits) {
+  if (!Number.isFinite(value)) return '--';
+  const fixed = value.toFixed(digits);
+  return fixed.replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+}
+
+function formatMetricValue(value, unit, digits) {
+  const formatted = formatDecimal(value, digits);
+  if (formatted === '--') return formatted;
+  if (unit === '%') return `${formatted}%`;
+  return `${formatted} ${unit}`;
+}
+
+function formatDelta(value, unit, digits) {
+  if (!Number.isFinite(value)) return '--';
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  const formatted = formatDecimal(Math.abs(value), digits);
+  if (formatted === '--') return '--';
+  if (unit === '%') return `${sign}${formatted}%`;
+  return `${sign}${formatted} ${unit}`;
+}
+
 function formatDisplayDate(date) {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -664,6 +706,16 @@ function getTodayDate() {
 
 function isWorkoutDay(date) {
   return workoutDays.has(date.getUTCDay());
+}
+
+function isCustomWorkoutDate(dateStr) {
+  if (!state || !Array.isArray(state.customDates)) return false;
+  return state.customDates.includes(dateStr);
+}
+
+function isPlannedWorkoutDay(date, dateStr) {
+  const key = dateStr || formatDate(date);
+  return isWorkoutDay(date) || isCustomWorkoutDate(key);
 }
 
 function readDayData(dateStr) {
@@ -893,7 +945,14 @@ function renderExerciseList(card, group, data) {
       weightInput.dataset.group = group;
       weightInput.dataset.exercise = exercise.id;
       weightInput.dataset.exField = 'weight';
-      row.appendChild(weightInput);
+      const weightWrap = document.createElement('div');
+      weightWrap.className = 'unit-field';
+      const weightUnit = document.createElement('span');
+      weightUnit.className = 'unit-label';
+      weightUnit.textContent = 'kg';
+      weightWrap.appendChild(weightInput);
+      weightWrap.appendChild(weightUnit);
+      row.appendChild(weightWrap);
     }
 
     const repsInput = document.createElement('input');
@@ -906,7 +965,14 @@ function renderExerciseList(card, group, data) {
     repsInput.dataset.group = group;
     repsInput.dataset.exercise = exercise.id;
     repsInput.dataset.exField = 'reps';
-    row.appendChild(repsInput);
+    const repsWrap = document.createElement('div');
+    repsWrap.className = 'unit-field';
+    const repsUnit = document.createElement('span');
+    repsUnit.className = 'unit-label';
+    repsUnit.textContent = 'reps';
+    repsWrap.appendChild(repsInput);
+    repsWrap.appendChild(repsUnit);
+    row.appendChild(repsWrap);
 
     list.appendChild(row);
   });
@@ -941,7 +1007,14 @@ function renderExerciseList(card, group, data) {
       repsInput.dataset.exField = 'reps';
 
       row.appendChild(nameInput);
-      row.appendChild(repsInput);
+      const legacyRepsWrap = document.createElement('div');
+      legacyRepsWrap.className = 'unit-field';
+      const legacyRepsUnit = document.createElement('span');
+      legacyRepsUnit.className = 'unit-label';
+      legacyRepsUnit.textContent = 'reps';
+      legacyRepsWrap.appendChild(repsInput);
+      legacyRepsWrap.appendChild(legacyRepsUnit);
+      row.appendChild(legacyRepsWrap);
       list.appendChild(row);
     });
   }
@@ -989,8 +1062,8 @@ function renderSchedule() {
       const date = addDays(week, i);
       if (date < rangeStart || date > rangeEnd) continue;
       if (startDate && date.getTime() < startDate.getTime()) continue;
-      if (!isWorkoutDay(date)) continue;
       const dateStr = formatDate(date);
+      if (!isPlannedWorkoutDay(date, dateStr)) continue;
       group.appendChild(buildDayCard(dateStr, index));
       index += 1;
       hasDays = true;
@@ -1207,6 +1280,189 @@ function hasAnyActivity(dayData) {
     + (walkingActive ? Number(dayData.walking.distance) || 0 : 0);
   const reps = EXERCISE_GROUP_KEYS.reduce((sum, groupKey) => sum + totalReps(dayData[groupKey]), 0);
   return minutes > 0 || calories > 0 || distance > 0 || reps > 0;
+}
+
+function hasExerciseEntries(groupData) {
+  if (!groupData) return false;
+  const selected = groupData.selected || {};
+  const selectedValues = Object.values(selected);
+  for (const entry of selectedValues) {
+    if (!entry) continue;
+    const reps = String(entry.reps || '').trim();
+    const weight = String(entry.weight || '').trim();
+    if (reps || weight) return true;
+  }
+  const legacy = Array.isArray(groupData.legacy) ? groupData.legacy : [];
+  for (const item of legacy) {
+    if (!item) continue;
+    const name = String(item.name || '').trim();
+    const reps = String(item.reps || '').trim();
+    const weight = String(item.weight || '').trim();
+    if (name || reps || weight) return true;
+  }
+  return false;
+}
+
+function hasAnyRecordedData(dayData) {
+  if (!dayData) return false;
+  const cycling = dayData.cycling || {};
+  const walking = dayData.walking || {};
+  if ((Number(cycling.minutes) || 0) > 0) return true;
+  if (String(cycling.distance || '').trim()) return true;
+  if (String(cycling.calories || '').trim()) return true;
+  if ((Number(walking.minutes) || 0) > 0) return true;
+  if (String(walking.distance || '').trim()) return true;
+  if (String(walking.calories || '').trim()) return true;
+  return EXERCISE_GROUP_KEYS.some((groupKey) => hasExerciseEntries(dayData[groupKey]));
+}
+
+function getRangeStats(rangeStart, rangeEnd) {
+  const startDate = getStartDate();
+  const stats = {
+    planned: 0,
+    completedScheduled: 0,
+    activeDays: 0,
+    cyclingMinutes: 0,
+    walkingMinutes: 0,
+    cyclingDistance: 0,
+    walkingDistance: 0,
+    totalReps: 0,
+    strengthSessions: 0,
+    cardioSessions: 0,
+    estimatedBurn: 0,
+    bestDay: null,
+    lastWorkout: null,
+  };
+
+  for (let date = new Date(rangeStart); date <= rangeEnd; date = addDays(date, 1)) {
+    if (startDate && date.getTime() < startDate.getTime()) continue;
+    const dateStr = formatDate(date);
+    const isPlanned = isPlannedWorkoutDay(date, dateStr);
+    if (isPlanned) stats.planned += 1;
+
+    const dayData = readDayData(dateStr);
+    const hasActivity = hasAnyActivity(dayData);
+
+    if (hasActivity) stats.activeDays += 1;
+    if (hasActivity && isPlanned) stats.completedScheduled += 1;
+
+    const cyclingMinutes = Number(dayData.cycling.minutes) || 0;
+    const walkingMinutes = Number(dayData.walking.minutes) || 0;
+    const cyclingDistance = Number(dayData.cycling.distance) || 0;
+    const walkingDistance = Number(dayData.walking.distance) || 0;
+    const reps = EXERCISE_GROUP_KEYS.reduce((sum, groupKey) => sum + totalReps(dayData[groupKey]), 0);
+
+    stats.cyclingMinutes += cyclingMinutes;
+    stats.walkingMinutes += walkingMinutes;
+    stats.cyclingDistance += cyclingDistance;
+    stats.walkingDistance += walkingDistance;
+    stats.totalReps += reps;
+    if (reps > 0) stats.strengthSessions += 1;
+    if (cyclingMinutes + walkingMinutes > 0) stats.cardioSessions += 1;
+
+    const estimate = calculateEstimate(dayData, dateStr);
+    stats.estimatedBurn += estimate;
+
+    if (hasActivity) {
+      if (!stats.bestDay || estimate > stats.bestDay.kcal) {
+        stats.bestDay = { date: dateStr, kcal: estimate };
+      }
+      if (!stats.lastWorkout || date.getTime() > stats.lastWorkout.timestamp) {
+        stats.lastWorkout = { date: dateStr, kcal: estimate, timestamp: date.getTime() };
+      }
+    }
+  }
+
+  return stats;
+}
+
+function getNextWorkoutDate(fromDate, daysAhead) {
+  const startDate = getStartDate();
+  const horizon = Number.isFinite(daysAhead) ? daysAhead : 21;
+  for (let i = 0; i <= horizon; i += 1) {
+    const date = addDays(fromDate, i);
+    if (startDate && date.getTime() < startDate.getTime()) continue;
+    if (isPlannedWorkoutDay(date, formatDate(date))) return date;
+  }
+  return null;
+}
+
+function getLastWorkoutEntry() {
+  const startDate = getStartDate();
+  const dates = Object.keys(state.workouts || {});
+  let latest = null;
+  dates.forEach((dateStr) => {
+    const date = parseDate(dateStr);
+    if (!date) return;
+    if (startDate && date.getTime() < startDate.getTime()) return;
+    const dayData = readDayData(dateStr);
+    if (!hasAnyActivity(dayData)) return;
+    const kcal = calculateEstimate(dayData, dateStr);
+    if (!latest || date.getTime() > latest.timestamp) {
+      latest = { date: dateStr, kcal, timestamp: date.getTime() };
+    }
+  });
+  return latest;
+}
+
+function getMetricEntries() {
+  const startDate = getStartDate();
+  return Object.entries(state.metrics)
+    .map(([date, data]) => ({
+      date,
+      parsed: parseDate(date),
+      weight: Number(data.weight),
+      fat: Number(data.fat),
+      muscle: Number(data.muscle),
+    }))
+    .filter((entry) => entry.parsed && (!startDate || entry.parsed.getTime() >= startDate.getTime()))
+    .sort((a, b) => a.parsed.getTime() - b.parsed.getTime());
+}
+
+function getMetricEntriesInRange(rangeStart, rangeEnd) {
+  const startTime = rangeStart.getTime();
+  const endTime = rangeEnd.getTime();
+  return getMetricEntries().filter((entry) => {
+    const time = entry.parsed ? entry.parsed.getTime() : 0;
+    return time >= startTime && time <= endTime;
+  });
+}
+
+function getMetricFieldTrend(entries, field) {
+  const filtered = entries.filter((entry) => Number.isFinite(entry[field]));
+  if (!filtered.length) return null;
+  const earliest = filtered[0];
+  const latest = filtered[filtered.length - 1];
+  return {
+    earliest,
+    latest,
+    delta: latest[field] - earliest[field],
+  };
+}
+
+function getWeightRange(entries) {
+  const values = entries.map((entry) => entry.weight).filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
+
+function getCurrentStreak() {
+  const startDate = getStartDate();
+  const today = getTodayDate();
+  let streak = 0;
+  let date = new Date(today);
+
+  while (!startDate || date.getTime() >= startDate.getTime()) {
+    const dateStr = formatDate(date);
+    if (isPlannedWorkoutDay(date, dateStr)) {
+      const dayData = readDayData(dateStr);
+      if (!hasAnyActivity(dayData)) break;
+      streak += 1;
+    }
+    date = addDays(date, -1);
+  }
+
+  return streak;
 }
 
 function handleScheduleClick(event) {
@@ -1957,9 +2213,18 @@ function renderMetricsTable() {
     row.dataset.date = entry.date;
     row.innerHTML = `
       <div class="date">${formatDateLabel(entry.date)}</div>
-      <input type="number" step="0.1" min="0" data-field="weight" value="${escapeHtml(entry.weight)}">
-      <input type="number" step="0.1" min="0" max="100" data-field="fat" value="${escapeHtml(entry.fat)}">
-      <input type="number" step="0.1" min="0" max="100" data-field="muscle" value="${escapeHtml(entry.muscle)}">
+      <div class="unit-field">
+        <input type="number" step="0.1" min="0" data-field="weight" value="${escapeHtml(entry.weight)}">
+        <span class="unit-label">kg</span>
+      </div>
+      <div class="unit-field wide">
+        <input type="number" step="0.1" min="0" max="100" data-field="fat" value="${escapeHtml(entry.fat)}">
+        <span class="unit-label">% fat</span>
+      </div>
+      <div class="unit-field wide">
+        <input type="number" step="0.1" min="0" max="100" data-field="muscle" value="${escapeHtml(entry.muscle)}">
+        <span class="unit-label">% muscle</span>
+      </div>
       <div class="metrics-actions">
         <button data-action="remove">Remove</button>
         <div class="metrics-confirm">
@@ -2015,64 +2280,279 @@ function handleMetricsClick(event) {
   }
 }
 
+function handleCalendarClick(event) {
+  const cell = event.target.closest('.cal-day');
+  if (!cell || !yearCalendar || !yearCalendar.contains(cell)) return;
+  const dateStr = cell.dataset.date;
+  if (!dateStr) return;
+  const date = parseDate(dateStr);
+  if (!date) return;
+  const startDate = getStartDate();
+  if (startDate && date.getTime() < startDate.getTime()) return;
+
+  const isScheduled = cell.dataset.scheduled === 'true';
+  const isCustom = cell.dataset.custom === 'true';
+
+  if (isScheduled) {
+    ensureScheduleRangeForDate(date);
+    openScheduleDay(dateStr);
+    return;
+  }
+
+  if (!isCustom) {
+    addCustomWorkoutDate(dateStr);
+    ensureScheduleRangeForDate(date);
+    renderSchedule();
+    refreshInsights();
+    openScheduleDay(dateStr);
+    return;
+  }
+
+  const dayData = readDayData(dateStr);
+  if (!hasAnyRecordedData(dayData)) {
+    removeCustomWorkoutDate(dateStr, { removeData: true });
+    renderSchedule();
+    refreshInsights();
+    return;
+  }
+
+  const ok = window.confirm('Remove this custom day and delete logged data?');
+  if (!ok) return;
+  removeCustomWorkoutDate(dateStr, { removeData: true });
+  renderSchedule();
+  refreshInsights();
+}
+
+function handleProgressRangeClick(event) {
+  const button = event.target.closest('button[data-range]');
+  if (!button || !state || !state.settings) return;
+  const range = button.dataset.range;
+  if (!range) return;
+  if (state.settings.progressRange === range) return;
+  state.settings.progressRange = range;
+  saveState();
+  syncProgressRangeButtons();
+  refreshInsights();
+}
+
+function syncProgressRangeButtons() {
+  if (!progressRange || !state || !state.settings) return;
+  const current = getProgressRangeChoice();
+  progressRange.querySelectorAll('button[data-range]').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.range === current);
+  });
+}
+
+function getProgressRangeChoice() {
+  if (!state || !state.settings) return '30';
+  const choice = String(state.settings.progressRange || '30');
+  return ['30', '90', 'all'].includes(choice) ? choice : '30';
+}
+
+function addCustomWorkoutDate(dateStr) {
+  if (!state.customDates) state.customDates = [];
+  if (state.customDates.includes(dateStr)) return false;
+  state.customDates.push(dateStr);
+  state.customDates.sort();
+  saveState();
+  return true;
+}
+
+function removeCustomWorkoutDate(dateStr, options = {}) {
+  if (!state.customDates) return false;
+  const next = state.customDates.filter((entry) => entry !== dateStr);
+  if (next.length === state.customDates.length) return false;
+  state.customDates = next;
+  if (options.removeData && state.workouts) {
+    delete state.workouts[dateStr];
+  }
+  saveState();
+  return true;
+}
+
+function ensureScheduleRangeForDate(date) {
+  if (!state || !state.settings) return;
+  const startDate = getStartDate();
+  if (startDate && date.getTime() < startDate.getTime()) return;
+  const today = getTodayDate();
+  const diffDays = Math.round((today.getTime() - date.getTime()) / MS_PER_DAY);
+  let changed = false;
+
+  if (diffDays > 0) {
+    const requiredWeeks = Math.ceil(diffDays / 7);
+    const defaultPastWeeks = getDefaultPastWeeks();
+    const extraNeeded = Math.max(0, requiredWeeks - defaultPastWeeks);
+    if ((state.settings.extraPastWeeks || 0) < extraNeeded) {
+      state.settings.extraPastWeeks = extraNeeded;
+      changed = true;
+    }
+  } else if (diffDays < 0) {
+    const requiredWeeks = Math.ceil(Math.abs(diffDays) / 7);
+    const defaultFutureWeeks = getDefaultFutureWeeks();
+    const extraNeeded = Math.max(0, requiredWeeks - defaultFutureWeeks);
+    if ((state.settings.extraFutureWeeks || 0) < extraNeeded) {
+      state.settings.extraFutureWeeks = extraNeeded;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    saveState();
+    renderSchedule();
+  }
+}
+
+function openScheduleDay(dateStr) {
+  if (!scheduleEl) return;
+  const card = scheduleEl.querySelector(`.day-card[data-date="${dateStr}"]`);
+  if (!card) return;
+  card.classList.remove('collapsed');
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function getProgressRangeLabel(choice) {
+  if (choice === 'all') return 'All-time';
+  const days = Number(choice);
+  if (!Number.isFinite(days) || days <= 0) return '30 days';
+  return `${days} days`;
+}
+
+function getProgressHighlightLabel(range) {
+  if (range.choice === 'all') return 'All-time highlights';
+  const days = Number(range.days) || 30;
+  return `${days}-day highlights`;
+}
+
+function getProgressSubtitleLabel(range) {
+  if (range.choice === 'all') return 'All-time';
+  return `Last ${range.label}`;
+}
+
+function getEarliestDataDate() {
+  if (!state) return null;
+  let earliest = null;
+  const collectEarliest = (dateStr) => {
+    const date = parseDate(dateStr);
+    if (!date) return;
+    if (!earliest || date.getTime() < earliest.getTime()) {
+      earliest = date;
+    }
+  };
+
+  Object.keys(state.metrics || {}).forEach(collectEarliest);
+  Object.keys(state.workouts || {}).forEach(collectEarliest);
+  return earliest;
+}
+
+function getProgressRange() {
+  const today = getTodayDate();
+  const choice = getProgressRangeChoice();
+  if (choice === 'all') {
+    const earliest = getEarliestDataDate();
+    const startDate = getStartDate();
+    let start = earliest || startDate || today;
+    if (startDate && start.getTime() < startDate.getTime()) {
+      start = startDate;
+    }
+    return { start, end: today, label: getProgressRangeLabel(choice), choice };
+  }
+  const days = Number(choice) || 30;
+  let start = addDays(today, -(days - 1));
+  const startDate = getStartDate();
+  if (startDate && start.getTime() < startDate.getTime()) {
+    start = startDate;
+  }
+  return { start, end: today, label: getProgressRangeLabel(choice), days, choice };
+}
+
 function renderSummary() {
   const today = getTodayDate();
   const start = addDays(today, -6);
-  const startDate = getStartDate();
+  const weekStats = getRangeStats(start, today);
 
-  let planned = 0;
-  let completed = 0;
-  let cyclingMinutes = 0;
-  let walkingMinutes = 0;
-  let estimatedBurn = 0;
+  const completionRate = weekStats.planned
+    ? Math.round((weekStats.completedScheduled / weekStats.planned) * 100)
+    : 0;
+  const totalCardioMinutes = weekStats.cyclingMinutes + weekStats.walkingMinutes;
+  const totalCardioDistance = weekStats.cyclingDistance + weekStats.walkingDistance;
+  const avgBurnPerWorkout = weekStats.activeDays
+    ? Math.round(weekStats.estimatedBurn / weekStats.activeDays)
+    : 0;
+  const avgBurnPerDay = Math.round(weekStats.estimatedBurn / 7);
+  const streak = getCurrentStreak();
 
-  for (let i = 0; i < 7; i += 1) {
-    const date = addDays(start, i);
-    if (startDate && date.getTime() < startDate.getTime()) continue;
-    if (isWorkoutDay(date)) planned += 1;
-    const dateStr = formatDate(date);
-    const dayData = readDayData(dateStr);
-    if (hasAnyActivity(dayData)) completed += 1;
-    cyclingMinutes += Number(dayData.cycling.minutes) || 0;
-    walkingMinutes += Number(dayData.walking.minutes) || 0;
-    estimatedBurn += calculateEstimate(dayData, dateStr);
+  setSummary('workouts7', `${weekStats.completedScheduled}/${weekStats.planned}`);
+  setSummary('workouts7Sub', `${weekStats.planned} planned`);
+  setSummary('completionRate7', `${completionRate}%`);
+  setSummary('activeDays7', `${weekStats.activeDays} ${weekStats.activeDays === 1 ? 'day' : 'days'}`);
+  setSummary('activeDays7Sub', `${weekStats.cardioSessions} cardio / ${weekStats.strengthSessions} strength`);
+  setSummary('cardio7', `${Math.round(totalCardioMinutes)} min`);
+  setSummary('cardio7Sub', `${Math.round(weekStats.cyclingMinutes)} cycling / ${Math.round(weekStats.walkingMinutes)} walking`);
+  setSummary('cardioDistance7', `${formatDecimal(totalCardioDistance, 1)} km`);
+  setSummary('strengthReps7', `${Math.round(weekStats.totalReps)} reps`);
+  setSummary('strengthSessions7Sub', `${weekStats.strengthSessions} sessions`);
+  setSummary('burn7', `${Math.round(weekStats.estimatedBurn)} kcal`);
+  setSummary('burn7Sub', `Avg ${avgBurnPerDay} / day`);
+  setSummary('burnAvg7', weekStats.activeDays ? `${avgBurnPerWorkout} kcal` : '--');
+  setSummary('streak', `${streak} workout${streak === 1 ? '' : 's'}`);
+
+  if (weekStats.planned > 0) {
+    setSummary(
+      'weekFocus',
+      `Completed ${weekStats.completedScheduled} of ${weekStats.planned} scheduled workouts (${completionRate}%).`,
+    );
+  } else {
+    setSummary('weekFocus', 'No workouts scheduled in the last 7 days.');
   }
 
-  setSummary('workouts7', `${completed}/${planned}`);
-  setSummary('workouts7Sub', `${planned} planned`);
-  setSummary('cardio7', `${Math.round(cyclingMinutes + walkingMinutes)} min`);
-  setSummary('burn7', `${Math.round(estimatedBurn)} kcal`);
+  if (totalCardioMinutes > 0 || totalCardioDistance > 0) {
+    setSummary(
+      'cardioSplit',
+      `Cardio: ${Math.round(totalCardioMinutes)} min (${Math.round(weekStats.cyclingMinutes)} cycling / ${Math.round(weekStats.walkingMinutes)} walking), ${formatDecimal(totalCardioDistance, 1)} km logged.`,
+    );
+  } else {
+    setSummary('cardioSplit', 'Cardio: no sessions logged this week.');
+  }
 
-  const metrics = Object.entries(state.metrics)
-    .map(([date, data]) => ({
-      date,
-      weight: Number(data.weight),
-    }))
-    .filter((entry) => !Number.isNaN(entry.weight))
-    .filter((entry) => {
-      const parsed = parseDate(entry.date);
-      return !startDate || (parsed && parsed.getTime() >= startDate.getTime());
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
+  if (weekStats.totalReps > 0) {
+    setSummary(
+      'strengthSplit',
+      `Strength: ${Math.round(weekStats.totalReps)} reps across ${weekStats.strengthSessions} sessions.`,
+    );
+  } else {
+    setSummary('strengthSplit', 'Strength: no reps logged this week.');
+  }
 
-  const recentMetrics = metrics.filter((entry) => {
-    const date = parseDate(entry.date);
-    return date && date.getTime() <= today.getTime();
-  });
+  const lastWorkout = getLastWorkoutEntry();
+  if (lastWorkout && lastWorkout.date) {
+    const lastDate = parseDate(lastWorkout.date);
+    const dateLabel = lastDate ? formatShortDayLabel(lastDate) : formatDateLabel(lastWorkout.date);
+    const kcalLabel = Number.isFinite(lastWorkout.kcal) ? ` (${Math.round(lastWorkout.kcal)} kcal)` : '';
+    setSummary('recentWorkout', `Last workout: ${dateLabel}${kcalLabel}.`);
+  } else {
+    setSummary('recentWorkout', 'Last workout: no entries yet.');
+  }
 
-  const latest = recentMetrics[recentMetrics.length - 1];
+  const nextWorkoutDate = getNextWorkoutDate(today, 21);
+  if (nextWorkoutDate) {
+    const isToday = nextWorkoutDate.getTime() === today.getTime();
+    const label = isToday ? 'Today' : formatShortDayLabel(nextWorkoutDate);
+    setSummary('upcomingWorkout', `Next workout: ${label}.`);
+  } else {
+    setSummary('upcomingWorkout', 'Next workout: not scheduled.');
+  }
+
+  const metrics = getMetricEntries();
+  const weightEntries = metrics.filter((entry) => Number.isFinite(entry.weight));
+  const latest = weightEntries[weightEntries.length - 1];
   const deltaStart = addDays(today, -14);
-  const earliest = recentMetrics.find((entry) => {
-    const date = parseDate(entry.date);
-    return date && date.getTime() >= deltaStart.getTime();
-  });
+  const earliest = weightEntries.find((entry) => entry.parsed && entry.parsed.getTime() >= deltaStart.getTime());
 
   if (latest) {
-    setSummary('weightLatest', `${latest.weight.toFixed(1)} kg`);
+    setSummary('weightLatest', formatMetricValue(latest.weight, 'kg', 1));
     if (earliest && earliest.weight !== latest.weight) {
       const delta = latest.weight - earliest.weight;
-      const sign = delta >= 0 ? '+' : '-';
-      setSummary('weightDelta', `${sign}${Math.abs(delta).toFixed(1)} kg over 14d`);
+      setSummary('weightDelta', `${formatDelta(delta, 'kg', 1)} over 14d`);
     } else {
       setSummary('weightDelta', 'No recent delta');
     }
@@ -2082,6 +2562,82 @@ function renderSummary() {
   }
 }
 
+function renderProgressDetails() {
+  const range = getProgressRange();
+  const stats = getRangeStats(range.start, range.end);
+  const completionRate = stats.planned
+    ? Math.round((stats.completedScheduled / stats.planned) * 100)
+    : 0;
+  const avgBurn = stats.activeDays
+    ? Math.round(stats.estimatedBurn / stats.activeDays)
+    : 0;
+
+  syncProgressRangeButtons();
+
+  if (progressSubtitle) {
+    progressSubtitle.textContent = `Weight, fat, muscle, and training output · ${getProgressSubtitleLabel(range)}`;
+  }
+  if (progressHighlightTitle) {
+    progressHighlightTitle.textContent = getProgressHighlightLabel(range);
+  }
+
+  setProgress('load30', `${Math.round(stats.estimatedBurn)} kcal`);
+  setProgress('load30Sub', stats.activeDays ? `${avgBurn} avg/workout` : 'No workouts logged');
+  setProgress('completion30', `${stats.completedScheduled}/${stats.planned}`);
+  setProgress('completion30Sub', stats.planned ? `${completionRate}% scheduled` : 'No scheduled workouts');
+
+  if (stats.bestDay) {
+    const bestDate = parseDate(stats.bestDay.date);
+    const label = bestDate ? formatShortDayLabel(bestDate) : formatDateLabel(stats.bestDay.date);
+    setProgress('bestWorkout30', `${Math.round(stats.bestDay.kcal)} kcal`);
+    setProgress('bestWorkout30Sub', label);
+  } else {
+    setProgress('bestWorkout30', '--');
+    setProgress('bestWorkout30Sub', 'No workouts yet');
+  }
+
+  const metrics = getMetricEntriesInRange(range.start, range.end);
+  setProgressMetric(metrics, 'weight', 'kg', 1, 'weightChange30', 'weightChange30Sub', 'weight');
+  setProgressMetric(metrics, 'fat', '%', 1, 'fatChange30', 'fatChange30Sub', 'fat');
+  setProgressMetric(metrics, 'muscle', '%', 1, 'muscleChange30', 'muscleChange30Sub', 'muscle');
+
+  setProgress(
+    'progressActive',
+    `Active days: ${stats.activeDays} (cardio ${stats.cardioSessions}, strength ${stats.strengthSessions}).`,
+  );
+
+  const totalCardioMinutes = stats.cyclingMinutes + stats.walkingMinutes;
+  const totalCardioDistance = stats.cyclingDistance + stats.walkingDistance;
+  setProgress(
+    'progressCardio',
+    `Cardio: ${Math.round(totalCardioMinutes)} min, ${formatDecimal(totalCardioDistance, 1)} km logged.`,
+  );
+  setProgress('progressStrength', `Strength: ${Math.round(stats.totalReps)} reps.`);
+
+  const weightRange = getWeightRange(metrics);
+  if (weightRange) {
+    setProgress(
+      'progressWeightRange',
+      `Weight range: ${formatMetricValue(weightRange.min, 'kg', 1)} to ${formatMetricValue(weightRange.max, 'kg', 1)}.`,
+    );
+  } else {
+    setProgress('progressWeightRange', 'Weight range: no data yet.');
+  }
+}
+
+function setProgressMetric(entries, field, unit, digits, valueKey, subKey, label) {
+  const trend = getMetricFieldTrend(entries, field);
+  if (!trend) {
+    setProgress(valueKey, '--');
+    setProgress(subKey, `No ${label} data`);
+    return;
+  }
+  setProgress(valueKey, formatDelta(trend.delta, unit, digits));
+  const startValue = formatMetricValue(trend.earliest[field], unit, digits);
+  const endValue = formatMetricValue(trend.latest[field], unit, digits);
+  setProgress(subKey, `From ${startValue} to ${endValue}`);
+}
+
 function renderYearCalendar() {
   if (!yearCalendar) return;
   const today = getTodayDate();
@@ -2089,6 +2645,7 @@ function renderYearCalendar() {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const firstCompleted = getFirstCompletedDate();
   const startDate = getStartDate();
+  const customDates = new Set(Array.isArray(state.customDates) ? state.customDates : []);
 
   const includeDec2025 = year >= 2026;
 
@@ -2137,7 +2694,15 @@ function renderYearCalendar() {
         grid.appendChild(cell);
         continue;
       }
-      if (isWorkoutDay(date)) {
+      const isScheduled = isWorkoutDay(date);
+      const isCustom = customDates.has(dateStr);
+      const isPlanned = isScheduled || isCustom;
+
+      cell.dataset.date = dateStr;
+      if (isScheduled) cell.dataset.scheduled = 'true';
+      if (isCustom) cell.dataset.custom = 'true';
+
+      if (isPlanned) {
         const dayData = readDayData(dateStr);
         const completed = hasAnyActivity(dayData);
         const isPast = date.getTime() < today.getTime();
@@ -2166,8 +2731,14 @@ function setSummary(key, value) {
   if (el) el.textContent = value;
 }
 
+function setProgress(key, value) {
+  const el = document.querySelector(`[data-progress="${key}"]`);
+  if (el) el.textContent = value;
+}
+
 function refreshInsights() {
   renderSummary();
+  renderProgressDetails();
   renderYearCalendar();
   refreshCharts();
 }
@@ -2203,6 +2774,45 @@ function refreshCharts() {
   drawCalorieChart();
 }
 
+function getLabelStep(totalPoints, maxLabels) {
+  if (totalPoints <= maxLabels) return 1;
+  return Math.ceil(totalPoints / maxLabels);
+}
+
+function updateBodyChartValues(points) {
+  const dateEl = document.querySelector('[data-body-value="date"]');
+  const weightEl = document.querySelector('[data-body-value="weight"]');
+  const fatEl = document.querySelector('[data-body-value="fat"]');
+  const muscleEl = document.querySelector('[data-body-value="muscle"]');
+  if (!dateEl && !weightEl && !fatEl && !muscleEl) return;
+
+  if (!points.length) {
+    if (dateEl) dateEl.textContent = '--';
+    if (weightEl) weightEl.textContent = '--';
+    if (fatEl) fatEl.textContent = '--';
+    if (muscleEl) muscleEl.textContent = '--';
+    return;
+  }
+
+  const latestEntry = points[points.length - 1];
+  const latestWeight = [...points].reverse().find((point) => Number.isFinite(point.weight));
+  const latestFat = [...points].reverse().find((point) => Number.isFinite(point.fat));
+  const latestMuscle = [...points].reverse().find((point) => Number.isFinite(point.muscle));
+
+  if (dateEl) {
+    dateEl.textContent = latestEntry.date ? formatShortDayLabel(latestEntry.date) : '--';
+  }
+  if (weightEl) {
+    weightEl.textContent = latestWeight ? formatMetricValue(latestWeight.weight, 'kg', 1) : '--';
+  }
+  if (fatEl) {
+    fatEl.textContent = latestFat ? formatMetricValue(latestFat.fat, '%', 1) : '--';
+  }
+  if (muscleEl) {
+    muscleEl.textContent = latestMuscle ? formatMetricValue(latestMuscle.muscle, '%', 1) : '--';
+  }
+}
+
 function drawBodyChart() {
   const canvas = document.getElementById('bodyChart');
   const ctx = setupCanvas(canvas);
@@ -2211,7 +2821,9 @@ function drawBodyChart() {
   const { width, height } = canvas.getBoundingClientRect();
   const padding = { top: 16, right: 32, bottom: 40, left: 32 };
 
-  const points = getMetricPoints();
+  const range = getProgressRange();
+  const points = getMetricPoints(range);
+  updateBodyChartValues(points);
   if (points.length < 2) {
     drawEmptyState(ctx, width, height, 'Add metrics to see progress');
     return;
@@ -2248,13 +2860,18 @@ function drawBodyChart() {
   drawSeries(ctx, points, padding, chartWidth, chartHeight, xStep, (p) => p.weight, weightMin, weightRange, colors.accent);
   drawSeries(ctx, points, padding, chartWidth, chartHeight, xStep, (p) => p.fat, 0, 100, colors.accent2);
   drawSeries(ctx, points, padding, chartWidth, chartHeight, xStep, (p) => p.muscle, 0, 100, colors.accent3);
+  drawMarkers(ctx, points, padding, chartWidth, chartHeight, xStep, (p) => p.weight, weightMin, weightRange, colors.accent);
+  drawMarkers(ctx, points, padding, chartWidth, chartHeight, xStep, (p) => p.fat, 0, 100, colors.accent2);
+  drawMarkers(ctx, points, padding, chartWidth, chartHeight, xStep, (p) => p.muscle, 0, 100, colors.accent3);
 
   ctx.fillStyle = colors.muted;
   ctx.font = '9px Instrument Sans';
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const labelStep = getLabelStep(points.length, 12);
   points.forEach((point, index) => {
+    if (index !== points.length - 1 && index % labelStep !== 0) return;
     const label = formatShortDateNL(point.date);
     const x = padding.left + xStep * index;
     const y = height - 12;
@@ -2275,7 +2892,8 @@ function drawCalorieChart() {
   const { width, height } = canvas.getBoundingClientRect();
   const padding = { top: 16, right: 16, bottom: 40, left: 32 };
 
-  const data = getCaloriePoints();
+  const range = getProgressRange();
+  const data = getCaloriePoints(range);
   if (!data.length) {
     drawEmptyState(ctx, width, height, 'Log workouts to see output');
     return;
@@ -2304,7 +2922,9 @@ function drawCalorieChart() {
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const labelStep = getLabelStep(data.length, 12);
   data.forEach((item, index) => {
+    if (index !== data.length - 1 && index % labelStep !== 0) return;
     const x = padding.left + slotWidth * index + slotWidth / 2;
     const y = height - 12;
     ctx.save();
@@ -2352,6 +2972,19 @@ function drawSeries(ctx, points, padding, chartWidth, chartHeight, xStep, getVal
   ctx.stroke();
 }
 
+function drawMarkers(ctx, points, padding, chartWidth, chartHeight, xStep, getValue, min, range, color) {
+  ctx.fillStyle = color;
+  points.forEach((point, index) => {
+    const value = getValue(point);
+    if (!Number.isFinite(value)) return;
+    const x = padding.left + xStep * index;
+    const y = padding.top + chartHeight - ((value - min) / range) * chartHeight;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
 function drawEmptyState(ctx, width, height, message) {
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = getThemeColors().muted;
@@ -2363,11 +2996,10 @@ function drawEmptyState(ctx, width, height, message) {
   ctx.textBaseline = 'alphabetic';
 }
 
-function getMetricPoints() {
-  const today = getTodayDate();
-  const cutoff = addDays(today, -30);
-  const startDate = getStartDate();
-  const floor = startDate && startDate.getTime() > cutoff.getTime() ? startDate : cutoff;
+function getMetricPoints(range) {
+  const activeRange = range || getProgressRange();
+  const startTime = activeRange.start.getTime();
+  const endTime = activeRange.end.getTime();
   return Object.entries(state.metrics)
     .map(([date, data]) => ({
       date: parseDate(date),
@@ -2375,12 +3007,14 @@ function getMetricPoints() {
       fat: Number(data.fat),
       muscle: Number(data.muscle),
     }))
-    .filter((entry) => entry.date && entry.date.getTime() >= floor.getTime() && entry.date.getTime() <= today.getTime())
+    .filter((entry) => entry.date && entry.date.getTime() >= startTime && entry.date.getTime() <= endTime)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
-function getCaloriePoints() {
-  const startDate = getStartDate();
+function getCaloriePoints(range) {
+  const activeRange = range || getProgressRange();
+  const startTime = activeRange.start.getTime();
+  const endTime = activeRange.end.getTime();
   const entries = Object.keys(state.workouts)
     .sort()
     .map((date) => {
@@ -2391,12 +3025,10 @@ function getCaloriePoints() {
     .filter((entry) => entry.value > 0)
     .filter((entry) => {
       const parsed = parseDate(entry.date);
-      return !startDate || (parsed && parsed.getTime() >= startDate.getTime());
+      return parsed && parsed.getTime() >= startTime && parsed.getTime() <= endTime;
     });
 
-  const trimmed = entries.slice(-10);
-
-  return trimmed.map((entry) => ({
+  return entries.map((entry) => ({
     label: formatShortDateNL(parseDate(entry.date)),
     value: entry.value,
   }));

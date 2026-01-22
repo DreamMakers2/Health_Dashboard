@@ -33,34 +33,6 @@
 
         <aside class="insights">
           <section class="panel summary-panel">
-            <div class="panel-header">
-              <div>
-                <h2>Summary</h2>
-                <div class="panel-sub">Auto-updates as you log</div>
-              </div>
-            </div>
-            <div class="summary-grid">
-              <div class="summary-card">
-                <div class="summary-title">Workouts (7d)</div>
-                <div class="summary-value" data-summary="workouts7">0/0</div>
-                <div class="summary-sub" data-summary="workouts7Sub">planned</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-title">Cardio minutes (7d)</div>
-                <div class="summary-value" data-summary="cardio7">0 min</div>
-                <div class="summary-sub">Cycling + walking</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-title">Est. burn (7d)</div>
-                <div class="summary-value" data-summary="burn7">0 kcal</div>
-                <div class="summary-sub">From logged data</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-title">Weight trend</div>
-                <div class="summary-value" data-summary="weightLatest">--</div>
-                <div class="summary-sub" data-summary="weightDelta">No data yet</div>
-              </div>
-            </div>
             <div class="calendar-wrap">
               <div class="chart-title" id="calendarYearLabel">calendar</div>
               <div class="year-grid" id="yearCalendar"></div>
@@ -71,7 +43,53 @@
             <div class="panel-header">
               <div>
                 <h2>Progress</h2>
-                <div class="panel-sub">Weight, fat, muscle, and training output</div>
+                <div class="panel-sub" id="progressSubtitle">Weight, fat, muscle, and training output</div>
+              </div>
+              <div class="range-toggle" id="progressRange">
+                <button class="range-btn" type="button" data-range="30">30 days</button>
+                <button class="range-btn" type="button" data-range="90">90 days</button>
+                <button class="range-btn" type="button" data-range="all">All-time</button>
+              </div>
+            </div>
+            <div class="progress-grid">
+              <div class="summary-card">
+                <div class="summary-title">Weight change</div>
+                <div class="summary-value" data-progress="weightChange30">--</div>
+                <div class="summary-sub" data-progress="weightChange30Sub">No weight data</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Fat change</div>
+                <div class="summary-value" data-progress="fatChange30">--</div>
+                <div class="summary-sub" data-progress="fatChange30Sub">No fat data</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Muscle change</div>
+                <div class="summary-value" data-progress="muscleChange30">--</div>
+                <div class="summary-sub" data-progress="muscleChange30Sub">No muscle data</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Training load</div>
+                <div class="summary-value" data-progress="load30">0 kcal</div>
+                <div class="summary-sub" data-progress="load30Sub">Avg per workout</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Completion</div>
+                <div class="summary-value" data-progress="completion30">0/0</div>
+                <div class="summary-sub" data-progress="completion30Sub">Scheduled</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-title">Best workout</div>
+                <div class="summary-value" data-progress="bestWorkout30">--</div>
+                <div class="summary-sub" data-progress="bestWorkout30Sub">No workouts yet</div>
+              </div>
+            </div>
+            <div class="progress-notes">
+              <div class="chart-title" id="progressHighlightTitle">Highlights</div>
+              <div class="summary-lines">
+                <div class="summary-line" data-progress="progressActive"></div>
+                <div class="summary-line" data-progress="progressCardio"></div>
+                <div class="summary-line" data-progress="progressStrength"></div>
+                <div class="summary-line" data-progress="progressWeightRange"></div>
               </div>
             </div>
             <div class="chart-wrap">
@@ -82,10 +100,24 @@
                 <span class="legend-item"><span class="swatch fat"></span>Fat %</span>
                 <span class="legend-item"><span class="swatch muscle"></span>Muscle %</span>
               </div>
-            </div>
-            <div class="chart-wrap">
-              <div class="chart-title">Estimated kcal</div>
-              <canvas id="calorieChart"></canvas>
+              <div class="chart-values" id="bodyChartValues">
+                <div class="chart-value">
+                  <span>Latest</span>
+                  <strong data-body-value="date">--</strong>
+                </div>
+                <div class="chart-value">
+                  <span>Weight</span>
+                  <strong data-body-value="weight">--</strong>
+                </div>
+                <div class="chart-value">
+                  <span>Fat</span>
+                  <strong data-body-value="fat">--</strong>
+                </div>
+                <div class="chart-value">
+                  <span>Muscle</span>
+                  <strong data-body-value="muscle">--</strong>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -93,29 +125,34 @@
             <div class="panel-header">
               <div>
                 <h2>Body metrics entry</h2>
-                <div class="panel-sub">Weight, fat %, muscle %</div>
+                <div class="panel-sub">Add new entry</div>
               </div>
             </div>
             <div class="metrics-entry">
-              <label class="static-label">
-                Height (cm)
-                <div class="static-field" id="heightDisplay">Not set</div>
-              </label>
               <label>
-                Date
+                <span class="sr-only">Date</span>
                 <input type="date" id="metricDate" lang="nl">
               </label>
               <label>
-                Weight (kg)
-                <input type="number" step="0.1" min="0" id="metricWeight" inputmode="decimal">
+                <span class="sr-only">Weight (kg)</span>
+                <div class="unit-field">
+                  <input type="number" step="0.1" min="0" id="metricWeight" inputmode="decimal">
+                  <span class="unit-label">kg</span>
+                </div>
               </label>
               <label>
-                Fat %
-                <input type="number" step="0.1" min="0" max="100" id="metricFat" inputmode="decimal">
+                <span class="sr-only">% fat</span>
+                <div class="unit-field wide">
+                  <input type="number" step="0.1" min="0" max="100" id="metricFat" inputmode="decimal">
+                  <span class="unit-label">% fat</span>
+                </div>
               </label>
               <label>
-                Muscle %
-                <input type="number" step="0.1" min="0" max="100" id="metricMuscle" inputmode="decimal">
+                <span class="sr-only">% muscle</span>
+                <div class="unit-field wide">
+                  <input type="number" step="0.1" min="0" max="100" id="metricMuscle" inputmode="decimal">
+                  <span class="unit-label">% muscle</span>
+                </div>
               </label>
               <button class="btn" id="metricSave">Save</button>
             </div>
