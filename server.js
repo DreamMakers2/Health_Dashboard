@@ -4,6 +4,7 @@ const path = require('path');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
 const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'health.json');
@@ -65,6 +66,14 @@ const CONTENT_TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+};
+
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
 };
 
 function ensureDataFile() {
@@ -261,6 +270,7 @@ function readBody(req) {
 function sendJson(res, statusCode, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(statusCode, {
+    ...SECURITY_HEADERS,
     'Content-Type': CONTENT_TYPES['.json'],
     'Cache-Control': 'no-store',
   });
@@ -272,11 +282,15 @@ function sendFile(res, filePath) {
   const contentType = CONTENT_TYPES[ext] || 'application/octet-stream';
   fs.readFile(filePath, (error, content) => {
     if (error) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.writeHead(404, { ...SECURITY_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Not found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-store' });
+    res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      'Content-Type': contentType,
+      'Cache-Control': 'no-store',
+    });
     res.end(content);
   });
 }
@@ -344,10 +358,10 @@ const server = http.createServer(async (req, res) => {
     return sendFile(res, path.join(ROOT_DIR, fileName));
   }
 
-  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.writeHead(404, { ...SECURITY_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('Not found');
 });
 
-server.listen(PORT, () => {
-  console.log(`Health dashboard running at http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Health dashboard running at http://${HOST}:${PORT}`);
 });

@@ -4,7 +4,7 @@
     3,
     5
   ],
-  "defaultPastWeeks": 2,
+  "defaultPastWeeks": 1,
   "defaultFutureWeeks": 2,
   "darkMode": false,
   "exerciseGroups": {
@@ -40,18 +40,6 @@
           "label": "Pull-up",
           "hasWeight": false,
           "kcalFormula": "0.008 * (1.0 * bw)"
-        },
-        {
-          "id": "new-exercise",
-          "label": "Pectoral Fly",
-          "hasWeight": true,
-          "kcalFormula": "0.006 * (load + 0.1 * bw)"
-        },
-        {
-          "id": "new-exercise-2",
-          "label": "Dual Pulley Pulldown",
-          "hasWeight": true,
-          "kcalFormula": "0.006 * (load + 0.1 * bw)"
         }
       ]
     },
