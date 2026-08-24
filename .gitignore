@@ -1,0 +1,24 @@
+# Runtime data (contains personal health information)
+/data/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Runtime/debug artifacts
+*.log
+*.tmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories (not currently used, kept as a safety guard)
+node_modules/
+
+# Editor and OS artifacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
